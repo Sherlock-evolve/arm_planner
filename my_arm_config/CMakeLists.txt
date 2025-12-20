@@ -13,7 +13,6 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
-find_package(moveit_planners_ompl REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
@@ -57,18 +56,9 @@ ament_target_dependencies(qt_arm_client
 )
 target_link_libraries(qt_arm_client ${cpp_typesupport_target})
 
-add_library(my_arm_ompl_planner SHARED
-  src/my_ompl_planner_manager.cpp
-)
-ament_target_dependencies(my_arm_ompl_planner
-  moveit_planners_ompl
-  moveit_ros_planning_interface
-)
-
 install(TARGETS
   qt_arm_client
   moveit_motion_server
-  my_arm_ompl_planner
   DESTINATION lib/${PROJECT_NAME}
 )
 

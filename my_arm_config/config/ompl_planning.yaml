@@ -1,4 +1,4 @@
-planning_plugin: my_arm_config/MyOMPLPlannerManager
+planning_plugin: ompl_interface/OMPLPlanner
 request_adapters: >-
   default_planner_request_adapters/AddTimeOptimalParameterization
   default_planner_request_adapters/ResolveConstraintFrames
@@ -132,17 +132,12 @@ planner_configs:
     max_failures: 5000
   TrajOptDefault:
     type: geometric::TrajOpt
-  MyRRTkConfigDefault:
-    type: geometric::MyRRT
-    range: 0.0
-    goal_bias: 0.05
 
 arm:
-  default_planner_config: MyRRTkConfigDefault
+  default_planner_config: RRTConnectkConfigDefault
   projection_evaluator: joints(shoulder_pan_joint,shoulder_lift_joint,elbow_joint)
   longest_valid_segment_fraction: 0.05
   planner_configs:
-    - MyRRTkConfigDefault
     - RRTConnectkConfigDefault
     - RRTkConfigDefault
     - RRTstarkConfigDefault

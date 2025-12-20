@@ -1,4 +1,4 @@
-#include <moveit/ompl_interface/ompl_planner_manager.h>
+#include <moveit/planners/ompl/ompl_planner_manager.h>
 #include <moveit/planning_scene/planning_scene.h>
 #include <pluginlib/class_list_macros.hpp>
 

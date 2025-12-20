@@ -1,0 +1,221 @@
+# RRT算法流程图
+
+## 算法概述
+
+RRT (Rapidly-exploring Random Tree) 是一种基于采样的运动规划算法，通过随机采样和树扩展来探索状态空间。
+
+## 完整流程图
+
+```mermaid
+flowchart TD
+    Start([开始]) --> Init1[检查有效性<br/>checkValidity]
+    Init1 --> Init2[获取目标状态<br/>goal = getGoal]
+    Init2 --> Init3[初始化树<br/>添加起始状态到树]
+    Init3 --> CheckEmpty{树是否为空?}
+    CheckEmpty -->|是| Error[返回错误<br/>无有效起始状态]
+    CheckEmpty -->|否| Init4[分配状态采样器<br/>sampler_]
+    Init4 --> Init5[初始化变量<br/>solution = nullptr<br/>approxsol = nullptr<br/>approxdif = ∞]
+    Init5 --> MainLoop{主循环<br/>while !ptc}
+    
+    MainLoop -->|否| CheckSolution{是否有解?}
+    MainLoop -->|是| Sample[采样随机状态<br/>带目标偏向]
+    
+    Sample --> GoalBias{随机数 < goalBias<br/>且可采样目标?}
+    GoalBias -->|是| SampleGoal[采样目标状态<br/>goal_s->sampleGoal]
+    GoalBias -->|否| SampleUniform[均匀采样随机状态<br/>sampler_->sampleUniform]
+    SampleGoal --> FindNearest[找最近节点<br/>nmotion = nearest]
+    SampleUniform --> FindNearest
+    
+    FindNearest --> CalcDist[计算距离<br/>d = distance]
+    CalcDist --> CheckDist{距离 d > maxDistance?}
+    CheckDist -->|是| Interpolate[插值生成新状态<br/>interpolate]
+    CheckDist -->|否| UseRandom[使用随机状态<br/>dstate = rstate]
+    Interpolate --> CollisionCheck
+    UseRandom --> CollisionCheck
+    
+    CollisionCheck{碰撞检测<br/>checkMotion}
+    CollisionCheck -->|有碰撞| MainLoop
+    CollisionCheck -->|无碰撞| AddNode{是否添加中间状态?}
+    
+    AddNode -->|是| AddIntermediate[添加所有中间状态到树]
+    AddNode -->|否| AddSingle[添加单个新节点到树]
+    AddIntermediate --> GoalCheck
+    AddSingle --> GoalCheck
+    
+    GoalCheck[检查目标<br/>isSatisfied]
+    GoalCheck --> GoalSat{是否满足目标?}
+    GoalSat -->|是| SetSolution[记录解<br/>solution = nmotion<br/>break 退出循环]
+    GoalSat -->|否| UpdateApprox{距离 < approxdif?}
+    UpdateApprox -->|是| UpdateApproxSol[更新近似解<br/>approxsol = nmotion<br/>approxdif = dist]
+    UpdateApprox -->|否| MainLoop
+    UpdateApproxSol --> MainLoop
+    SetSolution --> CheckSolution
+    
+    CheckSolution{是否有解?}
+    CheckSolution -->|否| CheckApprox{是否有近似解?}
+    CheckSolution -->|是| BuildPath[构建路径<br/>回溯到起始节点]
+    CheckApprox -->|是| UseApprox[使用近似解<br/>solution = approxsol<br/>approximate = true]
+    CheckApprox -->|否| NoSolution[无解<br/>返回失败]
+    UseApprox --> BuildPath
+    
+    BuildPath --> AddPath[添加路径到问题定义<br/>addSolutionPath]
+    AddPath --> Cleanup[释放内存<br/>freeState]
+    NoSolution --> Cleanup
+    Cleanup --> Return[返回结果<br/>return solved, approximate]
+    Error --> End([结束])
+    Return --> End
+
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style Error fill:#FF6B6B
+    style NoSolution fill:#FFA500
+    style SetSolution fill:#87CEEB
+    style BuildPath fill:#98D8C8
+    style MainLoop fill:#FFE4B5
+```
+
+## 简化版流程图（核心循环）
+
+```mermaid
+flowchart TD
+    Start([开始]) --> InitTree[初始化树<br/>添加起始状态]
+    InitTree --> LoopStart{主循环<br/>while !ptc}
+    
+    LoopStart -->|继续| Step1[1. 采样<br/>随机状态 带目标偏向]
+    Step1 --> Step2[2. 找最近节点<br/>nearest]
+    Step2 --> Step3[3. 扩展<br/>如果距离>maxDistance则插值]
+    Step3 --> Step4[4. 碰撞检测<br/>checkMotion]
+    
+    Step4 --> Collision{有碰撞?}
+    Collision -->|是| LoopStart
+    Collision -->|否| Step5[5. 添加节点<br/>添加到树]
+    
+    Step5 --> Step6[6. 检查目标<br/>isSatisfied]
+    Step6 --> GoalReached{满足目标?}
+    GoalReached -->|是| ExitLoop[退出循环]
+    GoalReached -->|否| UpdateApprox2[更新近似解]
+    UpdateApprox2 --> LoopStart
+    
+    ExitLoop --> BuildPath2[构建路径<br/>回溯到起始节点]
+    LoopStart -->|结束| BuildPath2
+    BuildPath2 --> End([结束])
+
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style LoopStart fill:#FFE4B5
+    style ExitLoop fill:#87CEEB
+    style BuildPath2 fill:#98D8C8
+```
+
+## RRT算法实现详解
+
+RRT算法的实现主要分为三个阶段：**初始化阶段**、**主循环扩展阶段**和**路径构建阶段**。
+
+### 第一阶段：初始化
+
+首先，算法会进行一些准备工作：
+
+1. **检查有效性**：验证规划器的配置是否正确，确保状态空间、目标等都已正确设置。
+
+2. **获取目标状态**：从问题定义中获取目标状态区域，并检查目标是否可采样。
+
+3. **初始化树结构**：将所有起始状态添加到树中作为根节点。如果树为空（没有有效起始状态），算法会直接返回错误。
+
+4. **分配采样器**：为状态空间创建一个采样器（`sampler_`），这个采样器负责后续的随机状态生成。
+
+5. **初始化变量**：设置解相关的变量，包括 `solution`（最终解）、`approxsol`（近似解）和 `approxdif`（近似解距离）。
+
+### 第二阶段：主循环扩展（核心算法）
+
+这是RRT算法的核心部分，会不断迭代直到找到解或达到终止条件。每次迭代包含以下步骤：
+
+#### 步骤1：采样随机状态（带目标偏向）
+
+这是算法的第一步，需要生成一个随机状态来引导树的扩展。这里使用了**目标偏向策略**：
+
+```cpp
+if (随机数 < goalBias 且 可采样目标):
+    采样目标状态  // 以 goalBias 的概率直接采样目标
+else:
+    均匀采样随机状态  // 否则在整个状态空间均匀采样
+```
+
+**目标偏向的作用**：通过 `goalBias` 参数（默认0.05，即5%），算法会以一定概率直接采样目标状态，这样可以加速收敛。大部分时间（95%）还是随机采样，保证充分探索。
+
+#### 步骤2：找最近邻节点
+
+使用最近邻数据结构（通常是KD树）在已有的树中找到距离刚采样的随机状态最近的节点。这一步的时间复杂度是 O(log n)，其中 n 是树中当前的节点数。
+
+#### 步骤3：扩展生成新状态
+
+计算最近节点到随机状态的距离，然后根据距离决定如何生成新状态：
+
+```cpp
+距离 = distance(最近节点, 随机状态)
+if (距离 > maxDistance):
+    新状态 = interpolate(最近节点, 随机状态, maxDistance/距离)  // 插值限制步长
+else:
+    新状态 = 随机状态  // 距离足够小，直接使用随机状态
+```
+
+**步长限制**：通过 `maxDistance` 参数限制单次扩展的最大距离，避免扩展过大导致碰撞检测失败。
+
+#### 步骤4：碰撞检测
+
+检查从最近节点到新状态的路径是否无碰撞。这是安全性的关键保障：
+
+- **有碰撞**：直接跳过此次迭代，回到主循环开始下一次迭代
+- **无碰撞**：继续下一步，将新状态添加到树中
+
+#### 步骤5：添加节点到树
+
+根据配置有两种模式：
+
+- **添加中间状态模式**：如果启用了 `addIntermediateStates`，会将路径上的所有中间状态都添加到树中，这样可以提高路径的精度
+- **单节点模式**：只添加新状态这一个节点，这是默认模式
+
+#### 步骤6：检查目标
+
+检查新添加的节点是否满足目标条件：
+
+- **满足目标**：记录为最终解（`solution = nmotion`），然后退出主循环
+- **不满足目标**：计算到目标的距离，如果比之前的近似解更近，就更新近似解（`approxsol` 和 `approxdif`），然后继续下一次迭代
+
+### 第三阶段：路径构建与返回
+
+主循环结束后，需要处理结果：
+
+1. **检查是否有解**：
+   - 如果有最终解，直接使用
+   - 如果没有最终解但有近似解，使用近似解（标记为近似解）
+   - 如果都没有，返回失败
+
+2. **构建路径**：从目标节点开始，沿着 `parent` 指针不断回溯到起始节点，构建完整的路径序列。
+
+3. **清理资源**：释放所有分配的状态内存。
+
+4. **返回结果**：返回是否找到解，以及是否为近似解。
+
+### 算法特点总结
+
+1. **单树扩展**：从起始状态开始构建一棵树，逐步向目标扩展
+2. **随机采样**：通过随机采样探索状态空间，保证概率完备性
+3. **目标偏向**：以一定概率采样目标状态，平衡探索与收敛速度
+4. **步长限制**：通过 `maxDistance` 控制扩展步长，提高成功率
+5. **碰撞检测**：确保生成的路径安全无碰撞
+
+### 关键参数
+
+- **goalBias**（默认0.05）：目标偏向概率，控制算法在探索和收敛之间的平衡
+- **maxDistance**：单次扩展的最大距离，影响扩展速度和碰撞检测成功率
+- **addIntermediateStates**：是否添加中间状态，影响路径精度和树的大小
+
+### 复杂度分析
+
+- **时间复杂度**：每次迭代的主要开销是最近邻查找 O(log n)，总体复杂度为 O(n log n)，其中 n 是最终树中的节点数
+- **空间复杂度**：O(n)，需要存储树中的所有节点和状态
+
+### 算法优势
+
+RRT算法的优势在于它不需要对状态空间进行离散化，可以处理高维空间，并且具有概率完备性（给定足够时间，一定能找到解）。同时，通过目标偏向等策略，在实际应用中通常能较快找到解。
+
